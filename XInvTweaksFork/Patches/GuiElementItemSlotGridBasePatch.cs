@@ -16,31 +16,21 @@ internal class GuiElementItemSlotGridBasePatch
                    api.Input.KeyboardKeyState[(int)GlKeys.ShiftRight];
         if (!ctrl || !__instance.KeyboardControlEnabled ||
             !__instance.IsPositionInside(api.Input.MouseX, api.Input.MouseY)) return;
-        for (var i = 0; i < __instance.SlotBounds.Length; i++)
-        {
-            if (i >= ___renderedSlots.Count) break;
-
-            if (__instance.SlotBounds[i].PointInside(api.Input.MouseX, api.Input.MouseY))
-            {
-                OnMouseWheel(api, ___inventory[___renderedSlots.GetKeyAtIndex(i)], args.delta, ___SendPacketHandler);
-                args.SetHandled();
-            }
-        }
+        if (___inventory[__instance.hoverSlotId].Empty) return;
+        OnMouseWheel(api, ___inventory[__instance.hoverSlotId], args.delta, ___SendPacketHandler);
+        args.SetHandled();
     }
 
     internal static void OnMouseWheel(ICoreClientAPI api, ItemSlot source, int wheelDelta,
         Action<object> SendPacketHandler)
     {
-        object packet;
         if (api.World.Player.WorldData.CurrentGameMode == EnumGameMode.Creative) return;
-        packet = wheelDelta > 0 ? PushItem(api, source) : PullItem(api, source);
-
-        {
-            SendPacketHandler?.Invoke(packet);
-        }
+        var packet = wheelDelta > 0 ? PushItem(api, source) : PullItem(api, source);
+        if(packet == null) return;
+        SendPacketHandler?.Invoke(packet);
     }
 
-    internal static object PushItem(ICoreClientAPI api, ItemSlot source)
+    internal static object? PushItem(ICoreClientAPI api, ItemSlot source)
     {
         var op = new ItemStackMoveOperation(api.World, EnumMouseButton.Wheel, 0, EnumMergePriority.AutoMerge, 1)
         {
@@ -50,7 +40,7 @@ internal class GuiElementItemSlotGridBasePatch
         return api.World.Player.InventoryManager.TryTransferTo(source, target, ref op);
     }
 
-    internal static object PullItem(ICoreClientAPI api, ItemSlot target)
+    internal static object? PullItem(ICoreClientAPI api, ItemSlot target)
     {
         if (target?.Itemstack == null) return null;
         List<IInventory> inventories = api.World.Player.InventoryManager.OpenedInventories;
