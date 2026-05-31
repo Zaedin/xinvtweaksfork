@@ -3,14 +3,14 @@
         "Client": {
             "commandName": "Executable",
             "executablePath": "dotnet",
-            "commandLineArgs": "\"$(VINTAGE_STORY_122)/Vintagestory.dll\" --openWorld \"TestWorld\" --tracelog --addModPath \"$(ProjectDir)/bin/$(Configuration)/Mods\" --addOrigin \"$(ProjectDir)/assets\"",
-            "workingDirectory": "$(VINTAGE_STORY_122)"
+            "commandLineArgs": "\"$(VINTAGE_STORY)/Vintagestory.dll\" --openWorld TestWorld --tracelog --addModPath \"$(ProjectDir)/bin/$(Configuration)/Mods\" --addOrigin \"$(ProjectDir)/assets\"",
+            "workingDirectory": "$(VINTAGE_STORY)"
         },
         "Server": {
             "commandName": "Executable",
             "executablePath": "dotnet",
-            "commandLineArgs": "\"$(VINTAGE_STORY_122)/VintagestoryServer.dll\" --tracelog --addModPath \"$(ProjectDir)/bin/$(Configuration)/Mods\" --addOrigin \"$(ProjectDir)/assets\"",
-            "workingDirectory": "$(VINTAGE_STORY_122)"
+            "commandLineArgs": "\"$(VINTAGE_STORY)/VintagestoryServer.dll\" --tracelog --addModPath \"$(ProjectDir)/bin/$(Configuration)/Mods\" --addOrigin \"$(ProjectDir)/assets\"",
+            "workingDirectory": "$(VINTAGE_STORY)"
         }
     }
 }
