@@ -16,6 +16,7 @@ internal class GuiElementItemSlotGridBasePatch
                    api.Input.KeyboardKeyState[(int)GlKeys.ShiftRight];
         if (!ctrl || !__instance.KeyboardControlEnabled ||
             !__instance.IsPositionInside(api.Input.MouseX, api.Input.MouseY)) return;
+        if (__instance.hoverSlotId < 0) return;
         if (___inventory[__instance.hoverSlotId].Empty) return;
         OnMouseWheel(api, ___inventory[__instance.hoverSlotId], args.delta, ___SendPacketHandler);
         args.SetHandled();
