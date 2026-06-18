@@ -10,9 +10,9 @@
     "requiredOnClient": true,
     "requiredOnServer": false,
     "description": "Fork of Xandu's Inventory Tweaks for version 1.22 with fixed duplicating bugs",
-    "version": "1.9.0",
+    "version": "1.9.1",
     "dependencies": {
-        "game": "1.22.0-rc.*",
-        "survival": "1.22.0-rc.*"
+        "game": "1.22",
+        "survival": "1.22"
     }
 }

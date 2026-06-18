@@ -15,23 +15,18 @@ namespace XInvTweaksFork;
 
 public class XInvTweaksForkModSystem : ModSystem
 {
-    private static Harmony harmony;
+    private Harmony? harmony;
     private ICoreAPI api;
-
     private ICoreClientAPI capi;
     private ChestSortDialog chestSortDialog;
-    private string path;
+
+    private const string ConfigPath = "xinvtweaksfork.json";
+    
     public static InvTweaksConfig Config { get; private set; }
 
     public override double ExecuteOrder()
     {
         return 1.0;
-    }
-
-    private static void DoHarmonyPatch()
-    {
-        harmony = new Harmony("XInvTweakPatch");
-        harmony.PatchAll(Assembly.GetExecutingAssembly());
     }
 
     public override void StartPre(ICoreAPI coreApi)
@@ -65,17 +60,15 @@ public class XInvTweaksForkModSystem : ModSystem
 
     public override void Dispose()
     {
+        harmony?.UnpatchAll("XInvTweakPatch");
         base.Dispose();
-        harmony.UnpatchAll("XInvTweakPatch");
     }
 
     private void LoadConfig()
     {
-        path = "xinvtweaksfork.json";
-
         try
         {
-            Config = api.LoadModConfig<InvTweaksConfig>(path);
+            Config = api.LoadModConfig<InvTweaksConfig>(ConfigPath);
         }
         catch (Exception)
         {
@@ -120,7 +113,7 @@ public class XInvTweaksForkModSystem : ModSystem
             InventoryUtil.StorageFlagsOrder = Config.StorageFlagsOrder;
         }
 
-        api.StoreModConfig(Config, path);
+        api.StoreModConfig(Config, ConfigPath);
     }
 
     private void OnWorldLoaded()
@@ -144,10 +137,7 @@ public class XInvTweaksForkModSystem : ModSystem
                     found = true;
 
                     if (pair.Current.Value == value) continue;
-                    if (toAdd.TryAdd(pair.Current.Key, value))
-                    {
-                        toRemove.Add(pair.Current.Key);
-                    }
+                    if (toAdd.TryAdd(pair.Current.Key, value)) toRemove.Add(pair.Current.Key);
                 }
 
             if (found) continue;
@@ -172,12 +162,14 @@ public class XInvTweaksForkModSystem : ModSystem
                     Config.BulkQuanties.Add(iterator.Current.Key, iterator.Current.Value);
         }
 
-        api.StoreModConfig(Config, path);
+        api.StoreModConfig(Config, ConfigPath);
     }
 
     private void PatchClient()
     {
-        DoHarmonyPatch();
+        harmony = new Harmony("XInvTweakPatch");
+        harmony.PatchAll(Assembly.GetExecutingAssembly());
+
         if (Config.Tools)
             ManualPatch.PatchMethod(harmony, typeof(CollectibleObject), typeof(CollectibleObjectPatch), "DamageItem");
 
