@@ -4,13 +4,14 @@
     "name": "Xandus Inventory Tweaks Fork",
     "authors": [
         "Xandu",
-        "Zaedin"
+        "Zaedin",
+        "Baldrvolsk"
     ],
     "side": "universal",
     "requiredOnClient": true,
     "requiredOnServer": false,
     "description": "Fork of Xandu's Inventory Tweaks for version 1.22 with fixed duplicating bugs",
-    "version": "1.9.1",
+    "version": "1.9.2",
     "dependencies": {
         "game": "1.22",
         "survival": "1.22"
