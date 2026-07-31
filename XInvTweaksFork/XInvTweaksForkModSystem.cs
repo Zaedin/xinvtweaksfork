@@ -10,6 +10,7 @@ using Vintagestory.API.Server;
 using Vintagestory.Client.NoObf;
 using Vintagestory.GameContent;
 using XInvTweaksFork.Patches;
+using XInvTweaksFork.Patches.Compatibility;
 
 namespace XInvTweaksFork;
 
@@ -219,8 +220,37 @@ public class XInvTweaksForkModSystem : ModSystem
             ManualPatch.PatchMethod(harmony, typeof(GuiElementItemSlotGridBase),
                 typeof(GuiElementItemSlotGridBasePatch), "OnMouseWheel");
         //if (Config.survivalPick) ManualPatch.PatchMethod(harmony, typeof(SystemMouseInWorldInteractions), typeof(SystemMouseInWorldInteractionsPatch), "HandleMouseInteractionsBlockSelected");
+        
+        foreach (var system in capi.ModLoader.Systems)
+        {
+            var type = system.GetType();
+            api.Logger.Notification(type.FullName);
+        }
+        var modSystem = capi.ModLoader.GetModSystem("PlayerInventoryLib.PlayerInventoryLibSystem");
+        if (modSystem != null)
+        {
+            PatchPlayerInventoryLib(modSystem);
+        }
 
         capi.Event.LevelFinalize += OnWorldLoaded;
+    }
+    
+    private void PatchPlayerInventoryLib(ModSystem modSystem)
+    {
+        if (harmony is null) return;
+        var assembly = modSystem.GetType().Assembly;
+
+        var dialogType = assembly.GetType("PlayerInventoryLib.GUI.GuiDialogSurvivalInventory");
+        if (dialogType == null)
+        {
+            api.Logger.Warning("[XInvTweaksFork] PlayerInventoryLib detected, but GuiDialogSurvivalInventory was not found.");
+            return;
+        }
+
+        ManualPatch.PatchMethod(harmony, dialogType, typeof(GuiDialogPlayerInventoryLibPatch), "OnGuiOpened");
+        ManualPatch.PatchMethod(harmony, dialogType, typeof(GuiDialogPlayerInventoryLibPatch), "OnGuiClosed");
+
+        api.Logger.Notification("[XInvTweaksFork] Patched PlayerInventoryLib.");
     }
 
     private void RegisterKeys()
