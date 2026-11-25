@@ -66,7 +66,7 @@ public class XInvTweaksForkModSystem : ModSystem
     public override void Dispose()
     {
         SlotLocks?.EndEditing();
-        _chestSortDialog.Dispose();
+        _chestSortDialog?.Dispose();
         LockOverlay?.Dispose();
         _harmony?.UnpatchAll("XInvTweakPatch");
         base.Dispose();
