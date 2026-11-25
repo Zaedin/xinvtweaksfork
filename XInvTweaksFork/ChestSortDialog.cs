@@ -25,27 +25,34 @@ public class ChestSortDialog : HudElement
         var buttonFillBounds = ElementBounds.Fixed(195, GuiStyle.TitleBarHeight, 40, 40);
         var inputBounds = ElementBounds.Fixed(0, GuiStyle.TitleBarHeight + 40 + GuiStyle.HalfPadding, 190, 40);
         var clearBounds = ElementBounds.Fixed(195, GuiStyle.TitleBarHeight + 40 + GuiStyle.HalfPadding, 40, 40);
-        var lockBounds = ElementBounds.Fixed(0, GuiStyle.TitleBarHeight + 80 + 2 * GuiStyle.HalfPadding, 235, 40);
+        var priorityEnabled = XInvTweaksForkModSystem.Config.EnablePriority;
+        var lockY = GuiStyle.TitleBarHeight + (priorityEnabled ? 80 + 2 * GuiStyle.HalfPadding : 40 + GuiStyle.HalfPadding);
+        var lockBounds = ElementBounds.Fixed(0, lockY, 235, 40);
 
         var bgBounds = ElementBounds.Fill.WithFixedPadding(GuiStyle.HalfPadding);
         bgBounds.BothSizing = ElementSizing.FitToChildren;
-        bgBounds.WithChildren(buttonSortBounds, buttonPushBounds, buttonPullBounds, buttonFillBounds, inputBounds,
-            clearBounds, lockBounds);
+        bgBounds.WithChildren(buttonSortBounds, buttonPushBounds, buttonPullBounds, buttonFillBounds, lockBounds);
+        if (priorityEnabled) bgBounds.WithChildren(inputBounds, clearBounds);
 
-        SingleComposer = capi.Gui.CreateCompo("ChestSortDialog", dialogBounds)
+        var composer = capi.Gui.CreateCompo("ChestSortDialog", dialogBounds)
             .AddDialogBG(bgBounds)
             .AddDialogTitleBar("")
             .AddSmallButton(Lang.Get("xinvtweaksfork:sort"), OnSort, buttonSortBounds)
             .AddSmallButton(Lang.Get("xinvtweaksfork:Λ"), OnPush, buttonPushBounds)
             .AddSmallButton(Lang.Get("xinvtweaksfork:V"), OnPull, buttonPullBounds)
-            .AddSmallButton(Lang.Get("xinvtweaksfork:V\n¯"), OnFill, buttonFillBounds)
-            .AddTextInput(inputBounds, OnTextChanged, null, "input")
-            .AddSmallButton(Lang.Get("xinvtweaksfork:X"), OnClearText, clearBounds)
+            .AddSmallButton(Lang.Get("xinvtweaksfork:V\n¯"), OnFill, buttonFillBounds);
+
+        if (priorityEnabled)
+            composer.AddTextInput(inputBounds, OnTextChanged, null, "input")
+                .AddSmallButton(Lang.Get("xinvtweaksfork:X"), OnClearText, clearBounds);
+
+        SingleComposer = composer
             .AddSmallButton(Lang.Get("xinvtweaksfork:lockslots"), OnToggleLocks, lockBounds, key: "lockslots")
             .AddHoverText(Lang.Get("xinvtweaksfork:lockslots-desc"), CairoFont.WhiteSmallText(), 320, lockBounds)
             .Compose();
 
-        SingleComposer.GetTextInput("input")?.SetPlaceHolderText(Lang.Get("xinvtweaksfork:priority"));
+        if (priorityEnabled)
+            SingleComposer.GetTextInput("input")?.SetPlaceHolderText(Lang.Get("xinvtweaksfork:priority"));
     }
 
     private bool OnToggleLocks()
@@ -71,8 +78,7 @@ public class ChestSortDialog : HudElement
 
     protected void OnTextChanged(string text)
     {
-        if (text.Length == 0) InventoryUtil.Priority = null;
-        else InventoryUtil.Priority = text;
+        InventoryUtil.Priority = XInvTweaksForkModSystem.Config.EnablePriority ? text : "";
     }
 
     protected bool OnlyPlayerInventoriesOpen()
@@ -118,7 +124,8 @@ public class ChestSortDialog : HudElement
 
     public bool OnClearText()
     {
-        SingleComposer.GetTextInput("input")?.SetValue("");
+        if (XInvTweaksForkModSystem.Config.EnablePriority)
+            SingleComposer.GetTextInput("input")?.SetValue("");
         return true;
     }
 

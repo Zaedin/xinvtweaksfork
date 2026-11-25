@@ -219,7 +219,7 @@ public class InventoryUtil
 
         //create dictionary
         var counter = -1;
-        SortedDictionary<CollectibleObject, List<ItemSlot>> slots = new(new CollectibleComparer());
+        SortedDictionary<CollectibleObject, List<ItemSlot>> slots = new(new CollectibleComparer(XInvTweaksForkModSystem.Config.EnablePriority));
         Dictionary<EnumItemStorageFlags, List<ItemSlot>> destDic = new();
 
         foreach (var slot in inventory)
@@ -542,26 +542,36 @@ public class InventoryUtil
 
     private class CollectibleComparer : IComparer<CollectibleObject>
     {
+        private readonly bool enablePriority;
+
+        public CollectibleComparer(bool enablePriority)
+        {
+            this.enablePriority = enablePriority;
+        }
+
         public int Compare(CollectibleObject? x, CollectibleObject? y)
         {
             if (ReferenceEquals(x, y)) return 0;
             if (x is null) return -1;
             if (y is null) return 1;
 
-            var xMatch = x.WildCardMatch(Priority);
-            var yMatch = y.WildCardMatch(Priority);
-            if (xMatch != yMatch)
+            if (enablePriority && !string.IsNullOrEmpty(Priority))
             {
-                if (xMatch) return -1;
-                if (yMatch) return 1;
-            }
-            
-            xMatch = x.GetHeldItemName(new ItemStack(x)).Contains(Priority, StringComparison.OrdinalIgnoreCase);
-            yMatch = y.GetHeldItemName(new ItemStack(y)).Contains(Priority, StringComparison.OrdinalIgnoreCase);
-            if (xMatch != yMatch)
-            {
-                if (xMatch) return -1;
-                if (yMatch) return 1;
+                var xMatch = x.WildCardMatch(Priority);
+                var yMatch = y.WildCardMatch(Priority);
+                if (xMatch != yMatch)
+                {
+                    if (xMatch) return -1;
+                    if (yMatch) return 1;
+                }
+
+                xMatch = x.GetHeldItemName(new ItemStack(x)).Contains(Priority, StringComparison.OrdinalIgnoreCase);
+                yMatch = y.GetHeldItemName(new ItemStack(y)).Contains(Priority, StringComparison.OrdinalIgnoreCase);
+                if (xMatch != yMatch)
+                {
+                    if (xMatch) return -1;
+                    if (yMatch) return 1;
+                }
             }
 
             if (SortOrder.Count == 0) return x.Id.CompareTo(y.Id);
@@ -569,6 +579,7 @@ public class InventoryUtil
             var result = 0;
             foreach (var compareType in SortOrder)
             {
+                if (!enablePriority && compareType == "priority") continue;
                 result = Compare(x, y, compareType);
                 if (result != 0) return result;
             }

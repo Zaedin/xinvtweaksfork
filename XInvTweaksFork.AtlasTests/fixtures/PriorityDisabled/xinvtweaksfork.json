@@ -1,0 +1,6 @@
+{
+  "EnablePriority": false,
+  "ExtendChestUi": true,
+  "Priorities": { "target": 10 },
+  "SortOrder": ["priority", "id"]
+}

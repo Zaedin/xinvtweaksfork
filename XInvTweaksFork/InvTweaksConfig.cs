@@ -12,6 +12,7 @@ public class InvTweaksConfig
     public bool CrateSwitch = true;
     public int Delay = 200;
     public bool ExtendChestUi = true;
+    public bool EnablePriority = false;
     public bool GroundStorage = true;
     public readonly SortedSet<int> LockedSlots = [];
     public bool Piles = true;
