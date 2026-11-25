@@ -23,9 +23,11 @@ internal class InventoryBasePatch
             if (__instance[ii].Itemstack == null) continue;
             if (__instance[ii].Itemstack.Collectible != slot.Itemstack.Collectible) continue;
             var slotOp = new ItemStackMoveOperation(op.World, op.MouseButton, EnumModifierKey.SHIFT,
-                EnumMergePriority.AutoMerge);
-            slotOp.ActingPlayer = op.ActingPlayer;
-            slotOp.RequestedQuantity = __instance[ii].Itemstack.StackSize;
+                EnumMergePriority.AutoMerge)
+            {
+                ActingPlayer = op.ActingPlayer,
+                RequestedQuantity = __instance[ii].Itemstack.StackSize
+            };
 
             object[] objcs = slotOp.ActingPlayer.InventoryManager.TryTransferAway(__instance[ii], ref slotOp, false);
             if (objcs == null) continue;

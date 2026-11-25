@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using Newtonsoft.Json.Linq;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
@@ -13,11 +14,11 @@ namespace XInvTweaksFork;
 
 public class InventoryUtil
 {
-    internal static List<string> SortOrder = new();
-    internal static List<string> StackOrder = new();
-    internal static List<EnumItemStorageFlags> StorageFlagsOrder = new();
+    internal static List<string> SortOrder = [];
+    internal static List<string> StackOrder = [];
+    internal static List<EnumItemStorageFlags> StorageFlagsOrder = [];
     internal static Dictionary<string, int> Priorities = new();
-    internal static string Priority = null;
+    internal static string Priority = "";
 
     private static float TransitionState(ItemStack itemStack)
     {
@@ -102,22 +103,22 @@ public class InventoryUtil
             if (inventory is InventoryBasePlayer) continue;
             var collectibles = new Dictionary<CollectibleObject, int>();
 
-            var trader = inventory as InventoryTrader;
-            if (trader != null)
+            if (inventory is InventoryTrader trader)
             {
-                foreach (ItemSlot slot in trader.BuyingSlots)
+                foreach (var slot in trader.BuyingSlots)
                     if (slot.Itemstack != null && !collectibles.ContainsKey(slot.Itemstack.Collectible))
                     {
-                        if ((slot as ItemSlotTrade)?.TradeItem?.Stock == 0) continue;
-                        collectibles.Add(slot.Itemstack.Collectible,
-                            slot.StackSize * (slot as ItemSlotTrade)?.TradeItem?.Stock ?? 0);
+                        if (slot.TradeItem?.Stock == 0) continue;
+                        if (slot.Itemstack.Collectible != null)
+                            collectibles.Add(slot.Itemstack.Collectible,
+                                slot.StackSize * slot.TradeItem?.Stock ?? 0);
                     }
             }
             else
             {
                 foreach (var slot in inventory)
-                    if (slot.Itemstack != null && !collectibles.ContainsKey(slot.Itemstack.Collectible))
-                        collectibles.Add(slot.Itemstack.Collectible, 0);
+                    if (slot.Itemstack != null)
+                        collectibles.TryAdd(slot.Itemstack.Collectible, 0);
             }
 
             SortIntoInventory(capi, backpack, inventory, collectibles, 4, true);
@@ -125,70 +126,70 @@ public class InventoryUtil
         }
     }
 
-    public static void SortIntoInventory(ICoreClientAPI capi, IInventory sourceInv, IInventory destInv,
+    private static void SortIntoInventory(ICoreClientAPI capi, IInventory sourceInv, IInventory destInv,
         Dictionary<CollectibleObject, int> collectibles, int first, bool lockedSlots)
     {
         if (IsBlacklisted(sourceInv)) return;
         if (IsBlacklisted(destInv)) return;
 
-        var slotID = -1;
+        var slotId = -1;
         foreach (var slot in sourceInv)
         {
-            slotID++;
-            if (slotID < first) continue;
+            slotId++;
+            if (slotId < first) continue;
             if (slot.Itemstack == null) continue;
             if (lockedSlots)
             {
-                var reverseSlotId = slotID - sourceInv.Count;
-                if (XInvTweaksForkModSystem.Config.LockedSlots.Contains(slotID - first)) continue;
-                if (XInvTweaksForkModSystem.Config.LockedSlots.Contains(reverseSlotId)) continue;
+                if (SlotLockSelection.IsLocked(XInvTweaksForkModSystem.Config.LockedSlots,
+                        slotId, sourceInv.Count, first)) continue;
             }
 
             var key = slot.Itemstack.Collectible;
-            if (collectibles.ContainsKey(key))
-                while (slot.StackSize > 0)
+            if (!collectibles.ContainsKey(key)) continue;
+            
+            while (slot.StackSize > 0)
+            {
+                var demand = collectibles[key];
+                var dest = destInv.GetBestSuitedSlot(slot);
+                if (dest?.slot == null) break;
+                if (dest.slot.Itemstack != null)
+                    //for some reason the game can say it would be a good idea to merge two cooking pots
+                    //and then crashes when you actually try to merge them
+                    //this should prevent it
+                    if (dest.slot.Itemstack.StackSize >= dest.slot.Itemstack.Collectible.MaxStackSize)
+                        break;
+
+                if (slot is ItemSlotOffhand) break;
+                var transfer = demand > 0 ? Math.Min(demand, slot.StackSize) : slot.StackSize;
+
+                var op = new ItemStackMoveOperation(capi.World, EnumMouseButton.Left, 0,
+                    EnumMergePriority.DirectMerge, transfer);
+                var obj = capi.World.Player.InventoryManager.TryTransferTo(slot, dest.slot, ref op);
+                if (obj != null) capi.Network.SendPacketClient(obj);
+
+                //rare case for specific items where GetBestSuitedSlot does not return a valid slot
+                if (op.MovedQuantity == 0)
                 {
-                    var demand = collectibles[key];
-                    var dest = destInv.GetBestSuitedSlot(slot);
-                    if (dest == null || dest.slot == null) break;
-                    if (dest.slot.Itemstack != null)
-                        //for some reason the game can say it would be a good idea to merge two cooking pots
-                        //and then crashes when you actually try to merge them
-                        //this should prevent it
-                        if (dest.slot.Itemstack.StackSize >= dest.slot.Itemstack.Collectible.MaxStackSize)
-                            break;
-
-                    if (slot is ItemSlotOffhand) break;
-                    var transfer = demand > 0 ? Math.Min(demand, slot.StackSize) : slot.StackSize;
-
-                    var op = new ItemStackMoveOperation(capi.World, EnumMouseButton.Left, 0,
-                        EnumMergePriority.DirectMerge, transfer);
-                    var obj = capi.World.Player.InventoryManager.TryTransferTo(slot, dest.slot, ref op);
-                    if (obj != null) capi.Network.SendPacketClient(obj);
-
-                    //rare case for specific items where GetBestSuitedSlot does not return a valid slot
-                    if (op.MovedQuantity == 0)
+                    foreach (var destSlot in destInv)
                     {
-                        foreach (var destSlot in destInv)
-                        {
-                            if (!destSlot.Empty) continue;
-                            op = new ItemStackMoveOperation(capi.World, EnumMouseButton.Left, 0,
-                                EnumMergePriority.DirectMerge, transfer);
-                            obj = capi.World.Player.InventoryManager.TryTransferTo(slot, destSlot, ref op);
-                            if (obj != null) capi.Network.SendPacketClient(obj);
-                            break;
-                        }
-
-                        if (op.MovedQuantity == 0) break;
+                        if (!destSlot.Empty) continue;
+                        op = new ItemStackMoveOperation(capi.World, EnumMouseButton.Left, 0,
+                            EnumMergePriority.DirectMerge, transfer);
+                        obj = capi.World.Player.InventoryManager.TryTransferTo(slot, destSlot, ref op);
+                        if (obj != null) capi.Network.SendPacketClient(obj);
+                        break;
                     }
 
-                    if (demand <= 0) continue;
-
-                    demand = demand - op.MovedQuantity;
-                    if (demand <= 0) collectibles.Remove(key);
-                    else collectibles[key] = demand;
-                    break;
+                    if (op.MovedQuantity == 0) break;
                 }
+
+                if (demand <= 0) continue;
+
+                demand = demand - op.MovedQuantity;
+                if (demand <= 0) collectibles.Remove(key);
+                else collectibles[key] = demand;
+                break;
+            }
         }
     }
 
@@ -204,16 +205,21 @@ public class InventoryUtil
         return count;
     }
 
-    public static void SortInventory(ICoreClientAPI capi, IInventory inventory, int first = 0, bool lockedSlots = false)
+    private static void SortInventory(ICoreClientAPI capi, IInventory inventory, int first = 0, bool lockedSlots = false)
     {
-        if (inventory is InventorySmelting) return;
-        if (inventory is InventoryTrader) return;
+        switch (inventory)
+        {
+            case InventorySmelting:
+            case InventoryTrader:
+                return;
+        }
+
         if (inventory.PutLocked || inventory.TakeLocked) return;
         if (IsBlacklisted(inventory)) return;
 
         //create dictionary
         var counter = -1;
-        SortedDictionary<CollectibleObject, List<ItemSlot>> slots = new(new CollectibleComparer());
+        SortedDictionary<CollectibleObject, List<ItemSlot>> slots = new(new CollectibleComparer(XInvTweaksForkModSystem.Config.EnablePriority));
         Dictionary<EnumItemStorageFlags, List<ItemSlot>> destDic = new();
 
         foreach (var slot in inventory)
@@ -221,14 +227,13 @@ public class InventoryUtil
             counter++;
             if (counter < first) continue;
             if (slot is ItemSlotLiquidOnly) continue;
-            var reverseSlotId = counter - inventory.Count;
-            if (lockedSlots && XInvTweaksForkModSystem.Config.LockedSlots.Contains(counter - first)) continue;
-            if (lockedSlots && XInvTweaksForkModSystem.Config.LockedSlots.Contains(reverseSlotId)) continue;
+            if (lockedSlots && SlotLockSelection.IsLocked(XInvTweaksForkModSystem.Config.LockedSlots,
+                    counter, inventory.Count, first)) continue;
 
             destDic.TryGetValue(slot.StorageType, out var destList);
             if (destList == null)
             {
-                destList = new List<ItemSlot>();
+                destList = [];
                 destDic[slot.StorageType] = destList;
             }
 
@@ -236,10 +241,9 @@ public class InventoryUtil
 
             if (slot.Itemstack == null) continue;
 
-            List<ItemSlot> slotList;
-            if (!slots.TryGetValue(slot.Itemstack.Collectible, out slotList))
+            if (!slots.TryGetValue(slot.Itemstack.Collectible, out var slotList))
             {
-                slotList = new List<ItemSlot>();
+                slotList = [];
                 slots.Add(slot.Itemstack.Collectible, slotList);
             }
 
@@ -250,30 +254,29 @@ public class InventoryUtil
         var merged = false;
         foreach (var slotList in slots.Values)
         {
-            ItemSlot notFull = null;
+            ItemSlot? notFull = null;
             var removeList = new List<ItemSlot>();
-            foreach (var slot in slotList)
-                if (slot.StackSize < slot.Itemstack.Collectible.MaxStackSize)
+            foreach (var slot in slotList.Where(slot => slot.Itemstack != null && slot.StackSize < slot.Itemstack.Collectible.MaxStackSize))
+            {
+                if (notFull == null)
                 {
-                    if (notFull == null)
-                    {
-                        notFull = slot;
-                        continue;
-                    }
-
-                    var op = new ItemStackMoveOperation(capi.World, EnumMouseButton.Left, 0,
-                        EnumMergePriority.DirectMerge, slot.StackSize);
-                    var obj = capi.World.Player.InventoryManager.TryTransferTo(slot, notFull, ref op);
-                    if (obj != null && op.MovedQuantity > 0)
-                    {
-                        capi.Network.SendPacketClient(obj);
-                        merged = true;
-                    }
-
-                    if (notFull.StackSize >= notFull.Itemstack.Collectible.MaxStackSize) notFull = null;
-                    if (slot.Itemstack == null) removeList.Add(slot);
-                    else notFull ??= slot;
+                    notFull = slot;
+                    continue;
                 }
+
+                var op = new ItemStackMoveOperation(capi.World, EnumMouseButton.Left, 0,
+                    EnumMergePriority.DirectMerge, slot.StackSize);
+                var obj = capi.World.Player.InventoryManager.TryTransferTo(slot, notFull, ref op);
+                if (obj != null && op.MovedQuantity > 0)
+                {
+                    capi.Network.SendPacketClient(obj);
+                    merged = true;
+                }
+
+                if (notFull.Itemstack != null && notFull.StackSize >= notFull.Itemstack.Collectible.MaxStackSize) notFull = null;
+                if (slot.Itemstack == null) removeList.Add(slot);
+                else notFull ??= slot;
+            }
 
             //remove empty stacks
             foreach (var slot in removeList) slotList.Remove(slot);
@@ -285,16 +288,16 @@ public class InventoryUtil
         foreach (var slotList in slots.Values)
         {
             slotList.Sort(new SlotComparer());
-            ItemSlot source;
 
             while (slotList.Count > 0)
             {
                 //find the best inventory for the stack
                 //must be done for each stack of the same item
                 //because an inventory can become full
-                source =  slotList[0];
+                var source = slotList[0];
                 slotList.RemoveAt(0);
                 var stack = source.Itemstack;
+                if (stack == null) continue;
                 var flags = stack.Collectible.StorageFlags;
                 EnumItemStorageFlags containerFlags = 0;
                 var flagCount = 0xffffff;
@@ -304,11 +307,9 @@ public class InventoryUtil
                 {
                     if ((flags & slotFlags) == 0) continue;
                     var count = GetFlagCount((long)slotFlags);
-                    if (count < flagCount)
-                    {
-                        containerFlags = slotFlags;
-                        flagCount = count;
-                    }
+                    if (count >= flagCount) continue;
+                    containerFlags = slotFlags;
+                    flagCount = count;
                 }
 
                 if (containerFlags == 0) break;
@@ -329,29 +330,27 @@ public class InventoryUtil
                     }
 
                     var obj = dest.Inventory.TryFlipItems(dest.Inventory.GetSlotId(dest), source);
-                    if (obj != null)
+                    if (obj == null) continue;
+                    if (source.Itemstack != null)
                     {
-                        if (source.Itemstack != null)
+                        //updates the slot list so that it stays correct after switching the items in the slots
+                        slots.TryGetValue(source.Itemstack.Collectible, out var sourceList);
+
+                        var index = 0;
+                        if (sourceList is { Count: 0 }) return;
+                        while (sourceList?[index] != dest)
                         {
-                            //updates the slot list so that it stays correct after switching the items in the slots
-                            slots.TryGetValue(source.Itemstack.Collectible, out var sourceList);
-
-                            var index = 0;
-                            if (sourceList.Count == 0) return;
-                            while (sourceList[index] != dest)
-                            {
-                                index++;
-                                if (index >= sourceList.Count) return;
-                            }
-
-                            sourceList[index] = source;
+                            index++;
+                            if (sourceList != null && index >= sourceList.Count) return;
                         }
 
-                        capi.Network.SendPacketClient(obj);
-                        destList.Remove(dest);
-                        if (destList.Count == 0) destDic.Remove(containerFlags);
-                        break;
+                        sourceList[index] = source;
                     }
+
+                    capi.Network.SendPacketClient(obj);
+                    destList.Remove(dest);
+                    if (destList.Count == 0) destDic.Remove(containerFlags);
+                    break;
                 }
             }
         }
@@ -361,9 +360,8 @@ public class InventoryUtil
     {
         List<IInventory> inventories = capi.World.Player.InventoryManager.OpenedInventories;
 
-        foreach (var inventory in inventories)
+        foreach (var inventory in inventories.Where(inventory => inventory is not InventoryBasePlayer))
         {
-            if (inventory is InventoryBasePlayer) continue;
             SortInventory(capi, inventory);
         }
     }
@@ -374,16 +372,14 @@ public class InventoryUtil
         var hotbar = capi.World.Player.InventoryManager.GetOwnInventory(GlobalConstants.hotBarInvClassName);
         List<IInventory> inventories = capi.World.Player.InventoryManager.OpenedInventories;
 
-        foreach (var inventory in inventories)
+        foreach (var inventory in inventories.Where(inventory => inventory is not InventoryBasePlayer))
         {
-            if (inventory is InventoryBasePlayer) continue;
-
             PullInventory(capi, inventory, backpack);
             PullInventory(capi, inventory, hotbar);
         }
     }
 
-    public static void FillInventory(ICoreClientAPI capi, IInventory sourceInv, IInventory destInv)
+    private static void FillInventory(ICoreClientAPI capi, IInventory sourceInv, IInventory destInv)
     {
         if (IsBlacklisted(sourceInv)) return;
         if (IsBlacklisted(destInv)) return;
@@ -392,17 +388,15 @@ public class InventoryUtil
         foreach (var slot in destInv)
         {
             if (slot.Itemstack == null) continue;
-            if (slot.StackSize < slot.MaxSlotStackSize)
+            if (slot.StackSize >= slot.MaxSlotStackSize) continue;
+            toFill.TryGetValue(slot.Itemstack.Collectible, out var list);
+            if (list == null)
             {
-                toFill.TryGetValue(slot.Itemstack.Collectible, out var list);
-                if (list == null)
-                {
-                    list = new List<ItemSlot>();
-                    toFill.Add(slot.Itemstack.Collectible, list);
-                }
-
-                list.Add(slot);
+                list = [];
+                toFill.Add(slot.Itemstack.Collectible, list);
             }
+
+            list.Add(slot);
         }
 
         foreach (var sourceSlot in sourceInv)
@@ -422,15 +416,14 @@ public class InventoryUtil
         }
     }
 
-    public static void PullInventory(ICoreClientAPI capi, IInventory sourceInv, IInventory destInv)
+    private static void PullInventory(ICoreClientAPI capi, IInventory sourceInv, IInventory destInv)
     {
         if (IsBlacklisted(sourceInv)) return;
         if (IsBlacklisted(destInv)) return;
 
         var first = 0;
         var last = sourceInv.Count;
-        var trader = sourceInv as InventoryTrader;
-        if (trader != null)
+        if (sourceInv is InventoryTrader trader)
         {
             first = 35;
             last = trader.Count - 1;
@@ -439,11 +432,11 @@ public class InventoryUtil
         for (var ii = first; ii < last; ++ii)
         {
             if (sourceInv[ii] is ItemSlotLiquidOnly) continue;
-            if (sourceInv[ii].Itemstack == null) continue;
-            while (sourceInv[ii].StackSize > 0)
+            if (sourceInv[ii]?.Itemstack == null) continue;
+            while (sourceInv[ii] is { StackSize: > 0 })
             {
                 var dest = destInv.GetBestSuitedSlot(sourceInv[ii]);
-                if (dest == null || dest.slot == null) break;
+                if (dest?.slot == null) break;
 
                 if (dest.slot.Itemstack != null)
                     //for some reason the game can say it would be a good idea to merge two cooking pots
@@ -455,7 +448,7 @@ public class InventoryUtil
                 if (destInv[ii] is ItemSlotOffhand) break;
 
                 var op = new ItemStackMoveOperation(capi.World, EnumMouseButton.Left, 0, EnumMergePriority.DirectMerge,
-                    sourceInv[ii].StackSize);
+                    sourceInv[ii]!.StackSize);
                 var obj = capi.World.Player.InventoryManager.TryTransferTo(sourceInv[ii], dest.slot, ref op);
                 if (obj != null) capi.Network.SendPacketClient(obj);
             }
@@ -471,40 +464,35 @@ public class InventoryUtil
             EnumMergePriority.AutoMerge);
         object[] objs = capi.World.Player.InventoryManager.TryTransferAway(slot, ref op, true, true);
         if (objs == null) return false;
-        foreach (var obj in objs)
-            if (obj != null)
-                capi.Network.SendPacketClient(obj);
+        foreach (var obj in objs) capi.Network.SendPacketClient(obj);
         return true;
     }
 
-    public static void FindBestSlot(CollectibleObject collectible, IPlayer player, ref ItemSlot bestSlot)
+    private static void FindBestSlot(CollectibleObject collectible, IPlayer? player, ref ItemSlot? bestSlot)
     {
-        if (collectible == null) return;
         if (player == null) return;
-        ItemSlot tempSlot = null;
+        ItemSlot? tempSlot = null;
 
         player.InventoryManager.Find(slot =>
         {
             // Ignore all slots that are in the crafting grid, which stops allowing to
             // quick-stack items from the crafting output without consuming materials
             if (slot.Inventory.ClassName == GlobalConstants.craftingInvClassName) return false;
-            if (slot.Itemstack?.Collectible == collectible)
+            if (slot.Itemstack?.Collectible != collectible) return false;
+            if (tempSlot != null)
             {
-                if (tempSlot != null)
+                if (tempSlot.Inventory == slot.Inventory)
                 {
-                    if (tempSlot.Inventory == slot.Inventory)
-                    {
-                        if (slot.StackSize < tempSlot.StackSize) tempSlot = slot;
-                    }
-                    else if (slot.Inventory.ClassName == GlobalConstants.hotBarInvClassName)
-                    {
-                        tempSlot = slot;
-                    }
+                    if (slot.StackSize < tempSlot.StackSize) tempSlot = slot;
                 }
-                else
+                else if (slot.Inventory.ClassName == GlobalConstants.hotBarInvClassName)
                 {
                     tempSlot = slot;
                 }
+            }
+            else
+            {
+                tempSlot = slot;
             }
 
             return false;
@@ -512,25 +500,25 @@ public class InventoryUtil
         if (tempSlot != null) bestSlot = tempSlot;
     }
 
-    public static int GetSlotID(ItemSlot slot)
+    private static int GetSlotId(ItemSlot? slot)
     {
-        var slotID = -1;
+        var slotId = -1;
         if (slot == null) return -1;
         for (var ii = 0; ii < slot.Inventory.Count; ++ii)
             if (slot.Inventory[ii] == slot)
             {
-                slotID = ii;
+                slotId = ii;
                 break;
             }
 
-        return slotID;
+        return slotId;
     }
 
     public static void FindPushableCollectible(InventoryBase inv, IPlayer player)
     {
         if (!player.Entity.Controls.ShiftKey) return;
         var hotbarSlot = player.InventoryManager.ActiveHotbarSlot;
-        ItemSlot bestSlot = null;
+        ItemSlot? bestSlot = null;
         foreach (var slot in inv)
         {
             if (slot.Empty) continue;
@@ -539,41 +527,50 @@ public class InventoryUtil
             FindBestSlot(collectible, player, ref bestSlot);
         }
 
-        var slotID = GetSlotID(bestSlot);
-        if (slotID == -1 || bestSlot == null) return;
-        var packet = bestSlot.Inventory.TryFlipItems(slotID, player.InventoryManager.ActiveHotbarSlot);
+        var slotId = GetSlotId(bestSlot);
+        if (slotId == -1 || bestSlot == null) return;
+        var packet = bestSlot.Inventory.TryFlipItems(slotId, player.InventoryManager.ActiveHotbarSlot);
         if (packet != null) (player.Entity.Api as ClientCoreAPI)?.Network.SendPacketClient(packet);
     }
 
-    public static bool IsBlacklisted(IInventory inventory)
+    private static bool IsBlacklisted(IInventory inventory)
     {
         var indexOf = inventory.ClassName.IndexOf('/');
         var invName = indexOf > 0 ? inventory.ClassName.Substring(0, indexOf) : inventory.ClassName;
         return XInvTweaksForkModSystem.Config.SortBlacklist.Contains(invName);
     }
 
-    internal class CollectibleComparer : IComparer<CollectibleObject>
+    private class CollectibleComparer : IComparer<CollectibleObject>
     {
-        public int Compare(CollectibleObject x, CollectibleObject y)
-        {
-            if (x == y) return 0;
+        private readonly bool enablePriority;
 
-            if (Priority != null)
+        public CollectibleComparer(bool enablePriority)
+        {
+            this.enablePriority = enablePriority;
+        }
+
+        public int Compare(CollectibleObject? x, CollectibleObject? y)
+        {
+            if (ReferenceEquals(x, y)) return 0;
+            if (x is null) return -1;
+            if (y is null) return 1;
+
+            if (enablePriority && !string.IsNullOrEmpty(Priority))
             {
-                var xmatch = x.WildCardMatch(Priority);
-                var ymatch = y.WildCardMatch(Priority);
-                if (xmatch != ymatch)
+                var xMatch = x.WildCardMatch(Priority);
+                var yMatch = y.WildCardMatch(Priority);
+                if (xMatch != yMatch)
                 {
-                    if (xmatch) return -1;
-                    if (ymatch) return 1;
+                    if (xMatch) return -1;
+                    if (yMatch) return 1;
                 }
 
-                xmatch = x.GetHeldItemName(new ItemStack(x)).Contains(Priority, StringComparison.OrdinalIgnoreCase);
-                ymatch = y.GetHeldItemName(new ItemStack(y)).Contains(Priority, StringComparison.OrdinalIgnoreCase);
-                if (xmatch != ymatch)
+                xMatch = x.GetHeldItemName(new ItemStack(x)).Contains(Priority, StringComparison.OrdinalIgnoreCase);
+                yMatch = y.GetHeldItemName(new ItemStack(y)).Contains(Priority, StringComparison.OrdinalIgnoreCase);
+                if (xMatch != yMatch)
                 {
-                    if (xmatch) return -1;
-                    if (ymatch) return 1;
+                    if (xMatch) return -1;
+                    if (yMatch) return 1;
                 }
             }
 
@@ -582,6 +579,7 @@ public class InventoryUtil
             var result = 0;
             foreach (var compareType in SortOrder)
             {
+                if (!enablePriority && compareType == "priority") continue;
                 result = Compare(x, y, compareType);
                 if (result != 0) return result;
             }
@@ -589,21 +587,15 @@ public class InventoryUtil
             return result;
         }
 
-        public static int SetPrio(CollectibleObject coll)
+        private static int SetPrio(CollectibleObject coll)
         {
-            var result = 0;
-            foreach (var entry in Priorities)
-                if (coll.WildCardMatch(entry.Key))
-                {
-                    result = entry.Value;
-                    break;
-                }
+            var result = (from entry in Priorities where coll.WildCardMatch(entry.Key) select entry.Value).FirstOrDefault();
 
-            coll.Attributes.Token.Last?.AddAfterSelf(new JProperty("sortpriority", result));
+            coll.Attributes.Token?.Last?.AddAfterSelf(new JProperty("sortpriority", result));
             return result;
         }
 
-        public int Compare(CollectibleObject x, CollectibleObject y, string compareType)
+        private static int Compare(CollectibleObject x, CollectibleObject y, string compareType)
         {
             var result = 0;
             switch (compareType)
@@ -617,11 +609,11 @@ public class InventoryUtil
                     break;
 
                 case "name":
-                    result = x.GetHeldItemName(new ItemStack(x)).CompareTo(y.GetHeldItemName(new ItemStack(y)));
+                    result = string.Compare(x.GetHeldItemName(new ItemStack(x)), y.GetHeldItemName(new ItemStack(y)), StringComparison.Ordinal);
                     break;
 
                 case "nameinvert":
-                    result = y.GetHeldItemName(new ItemStack(y)).CompareTo(x.GetHeldItemName(new ItemStack(x)));
+                    result = string.Compare(y.GetHeldItemName(new ItemStack(y)), x.GetHeldItemName(new ItemStack(x)), StringComparison.Ordinal);
                     break;
 
                 case "block":
@@ -725,11 +717,9 @@ public class InventoryUtil
                     {
                         var flgasx = x.StorageFlags & flags;
                         var flgasy = y.StorageFlags & flags;
-                        if (flgasx != flgasy)
-                        {
-                            result = flgasy - flgasx;
-                            break;
-                        }
+                        if (flgasx == flgasy) continue;
+                        result = flgasy - flgasx;
+                        break;
                     }
 
                     break;
@@ -737,13 +727,13 @@ public class InventoryUtil
                 case "priority":
                     if (Priorities.Count > 0 && x.Attributes != null && y.Attributes != null)
                     {
-                        var xprio = x.Attributes["sortpriority"].AsInt(-1);
-                        var yprio = y.Attributes["sortpriority"].AsInt(-1);
+                        var xPriority = x.Attributes["sortpriority"].AsInt(-1);
+                        var yPriority = y.Attributes["sortpriority"].AsInt(-1);
 
-                        if (xprio == -1) xprio = SetPrio(x);
-                        if (yprio == -1) yprio = SetPrio(y);
-                        var prioSort = yprio.CompareTo(xprio);
-                        if (prioSort != 0) return prioSort;
+                        if (xPriority == -1) xPriority = SetPrio(x);
+                        if (yPriority == -1) yPriority = SetPrio(y);
+                        var prioritySort = yPriority.CompareTo(xPriority);
+                        if (prioritySort != 0) return prioritySort;
                     }
 
                     break;
@@ -752,13 +742,13 @@ public class InventoryUtil
                     if (compareType.EndsWith("invert"))
                     {
                         var name = compareType.Remove(compareType.Length - 6);
-                        result = (int)((y.Attributes?[name]?.AsDouble() ?? 0 - x.Attributes?[name]?.AsDouble() ?? 0) *
+                        result = (int)((y.Attributes?[name].AsDouble() ?? 0 - x.Attributes?[name].AsDouble() ?? 0) *
                                        1000);
                     }
                     else
                     {
-                        result = (int)((x.Attributes?[compareType]?.AsDouble() ??
-                                        0 - y.Attributes?[compareType]?.AsDouble() ?? 0) * 1000);
+                        result = (int)((x.Attributes?[compareType].AsDouble() ??
+                                        0 - y.Attributes?[compareType].AsDouble() ?? 0) * 1000);
                     }
 
                     break;
@@ -768,19 +758,19 @@ public class InventoryUtil
         }
     }
 
-    internal class SlotComparer : IComparer<ItemSlot>
+    private class SlotComparer : IComparer<ItemSlot>
     {
-        private readonly StackComparer StackComparer = new();
+        private readonly StackComparer _stackComparer = new();
 
-        public int Compare(ItemSlot x, ItemSlot y)
+        public int Compare(ItemSlot? x, ItemSlot? y)
         {
-            return StackComparer.Compare(x.Itemstack, y.Itemstack);
+            return _stackComparer.Compare(x?.Itemstack, y?.Itemstack);
         }
     }
 
-    internal class StackComparer : IComparer<ItemStack>
+    private class StackComparer : IComparer<ItemStack>
     {
-        public int Compare(ItemStack x, ItemStack y)
+        public int Compare(ItemStack? x, ItemStack? y)
         {
             if (x == y) return 0;
             if (StackOrder.Count == 0) return 0;
@@ -795,9 +785,12 @@ public class InventoryUtil
             return result;
         }
 
-        public int Compare(ItemStack x, ItemStack y, string compareType)
+        private static int Compare(ItemStack? x, ItemStack? y, string compareType)
         {
-            var result = 0;
+            if (ReferenceEquals(x, y)) return 0;
+            if (x is null) return -1;
+            if (y is null) return 1;
+            int result;
             switch (compareType)
             {
                 case "durability":

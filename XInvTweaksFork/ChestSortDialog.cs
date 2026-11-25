@@ -8,10 +8,13 @@ namespace XInvTweaksFork;
 public class ChestSortDialog : HudElement
 {
     protected int openedContainers;
+    private readonly SlotLockSelection slotLocks;
 
-    public ChestSortDialog(ICoreClientAPI capi) : base(capi)
+    public ChestSortDialog(ICoreClientAPI capi, SlotLockSelection slotLocks) : base(capi)
     {
+        this.slotLocks = slotLocks;
         Setup();
+        slotLocks.EditingChanged += UpdateLockButton;
     }
 
     protected void Setup()
@@ -23,30 +26,64 @@ public class ChestSortDialog : HudElement
         var buttonFillBounds = ElementBounds.Fixed(195, GuiStyle.TitleBarHeight, 40, 40);
         var inputBounds = ElementBounds.Fixed(0, GuiStyle.TitleBarHeight + 40 + GuiStyle.HalfPadding, 190, 40);
         var clearBounds = ElementBounds.Fixed(195, GuiStyle.TitleBarHeight + 40 + GuiStyle.HalfPadding, 40, 40);
+        var priorityEnabled = XInvTweaksForkModSystem.Config.EnablePriority;
+        var lockY = GuiStyle.TitleBarHeight + (priorityEnabled ? 80 + 2 * GuiStyle.HalfPadding : 40 + GuiStyle.HalfPadding);
+        var lockBounds = ElementBounds.Fixed(0, lockY, 235, 40);
 
         var bgBounds = ElementBounds.Fill.WithFixedPadding(GuiStyle.HalfPadding);
         bgBounds.BothSizing = ElementSizing.FitToChildren;
-        bgBounds.WithChildren(buttonSortBounds, buttonPushBounds, buttonPullBounds, buttonFillBounds, inputBounds,
-            clearBounds);
+        bgBounds.WithChildren(buttonSortBounds, buttonPushBounds, buttonPullBounds, buttonFillBounds, lockBounds);
+        if (priorityEnabled) bgBounds.WithChildren(inputBounds, clearBounds);
 
-        SingleComposer = capi.Gui.CreateCompo("ChestSortDialog", dialogBounds)
+        var composer = capi.Gui.CreateCompo("ChestSortDialog", dialogBounds)
             .AddDialogBG(bgBounds)
             .AddDialogTitleBar("")
             .AddSmallButton(Lang.Get("xinvtweaksfork:sort"), OnSort, buttonSortBounds)
             .AddSmallButton(Lang.Get("xinvtweaksfork:Λ"), OnPush, buttonPushBounds)
             .AddSmallButton(Lang.Get("xinvtweaksfork:V"), OnPull, buttonPullBounds)
-            .AddSmallButton(Lang.Get("xinvtweaksfork:V\n¯"), OnFill, buttonFillBounds)
-            .AddTextInput(inputBounds, OnTextChanged, null, "input")
-            .AddSmallButton(Lang.Get("xinvtweaksfork:X"), OnClearText, clearBounds)
+            .AddSmallButton(Lang.Get("xinvtweaksfork:V\n¯"), OnFill, buttonFillBounds);
+
+        if (priorityEnabled)
+            composer.AddTextInput(inputBounds, OnTextChanged, null, "input")
+                .AddSmallButton(Lang.Get("xinvtweaksfork:X"), OnClearText, clearBounds);
+
+        SingleComposer = composer
+            .AddSmallButton(Lang.Get("xinvtweaksfork:lockslots"), OnToggleLocks, lockBounds, key: "lockslots")
+            .AddHoverText(Lang.Get("xinvtweaksfork:lockslots-desc"), CairoFont.WhiteSmallText(), 320, lockBounds)
             .Compose();
 
-        SingleComposer.GetTextInput("input")?.SetPlaceHolderText(Lang.Get("xinvtweaksfork:priority"));
+        if (priorityEnabled)
+            SingleComposer.GetTextInput("input")?.SetPlaceHolderText(Lang.Get("xinvtweaksfork:priority"));
+    }
+
+    private bool OnToggleLocks()
+    {
+        slotLocks.ToggleEditing();
+        return true;
+    }
+
+    private void UpdateLockButton()
+    {
+        SingleComposer.GetButton("lockslots").Text =
+            Lang.Get(slotLocks.IsEditing ? "xinvtweaksfork:lockslots-done" : "xinvtweaksfork:lockslots");
+        SingleComposer.ReCompose();
+    }
+
+    public override void OnGuiClosed()
+    {
+        slotLocks.EndEditing();
+        base.OnGuiClosed();
+    }
+
+    public override void Dispose()
+    {
+        slotLocks.EditingChanged -= UpdateLockButton;
+        base.Dispose();
     }
 
     protected void OnTextChanged(string text)
     {
-        if (text.Length == 0) InventoryUtil.Priority = null;
-        else InventoryUtil.Priority = text;
+        InventoryUtil.Priority = XInvTweaksForkModSystem.Config.EnablePriority ? text : "";
     }
 
     protected bool OnlyPlayerInventoriesOpen()
@@ -61,6 +98,7 @@ public class ChestSortDialog : HudElement
 
     public bool OnSort()
     {
+        if (slotLocks.IsEditing) return true;
         if (OnlyPlayerInventoriesOpen())
             InventoryUtil.SortBackpack(capi);
         else
@@ -70,25 +108,29 @@ public class ChestSortDialog : HudElement
 
     public bool OnPush()
     {
+        if (slotLocks.IsEditing) return true;
         InventoryUtil.SortIntoInventory(capi);
         return true;
     }
 
     public bool OnPull()
     {
+        if (slotLocks.IsEditing) return true;
         InventoryUtil.PullInventories(capi);
         return true;
     }
 
     public bool OnFill()
     {
+        if (slotLocks.IsEditing) return true;
         InventoryUtil.FillBackpack(capi);
         return true;
     }
 
     public bool OnClearText()
     {
-        SingleComposer.GetTextInput("input")?.SetValue("");
+        if (XInvTweaksForkModSystem.Config.EnablePriority)
+            SingleComposer.GetTextInput("input")?.SetValue("");
         return true;
     }
 
@@ -127,7 +169,7 @@ public class ChestSortDialog : HudElement
 
     public void OnInventoryClosed()
     {
-        openedContainers--;
+        openedContainers = System.Math.Max(0, openedContainers - 1);
         if (openedContainers <= 0) TryClose();
     }
 }

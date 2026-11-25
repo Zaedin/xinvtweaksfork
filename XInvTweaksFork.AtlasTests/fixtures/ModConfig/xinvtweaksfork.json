@@ -1,0 +1,6 @@
+{
+  "ExtendChestUi": false,
+  "PushPullWheel": false,
+  "Delay": 321,
+  "LockedSlots": [0, 19]
+}

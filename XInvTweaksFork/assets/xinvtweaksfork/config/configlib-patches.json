@@ -1,0 +1,118 @@
+{
+  "version": 0,
+  "file": "xinvtweaksfork.json",
+  "patches": {},
+  "settings": [
+    {
+      "type": "separator",
+      "title": "xinvtweaksfork:settings-title",
+      "text": "xinvtweaksfork:settings-restart"
+    },
+    {
+      "code": "ExtendChestUi",
+      "ingui": "xinvtweaksfork:setting-ExtendChestUi",
+      "comment": "xinvtweaksfork:setting-ExtendChestUi-desc",
+      "type": "boolean",
+      "default": true,
+      "clientSide": true
+    },
+    {
+      "code": "EnablePriority",
+      "ingui": "xinvtweaksfork:setting-EnablePriority",
+      "comment": "xinvtweaksfork:setting-EnablePriority-desc",
+      "type": "boolean",
+      "default": false,
+      "clientSide": true
+    },
+    {
+      "code": "PushPullWheel",
+      "ingui": "xinvtweaksfork:setting-PushPullWheel",
+      "comment": "xinvtweaksfork:setting-PushPullWheel-desc",
+      "type": "boolean",
+      "default": true,
+      "clientSide": true
+    },
+    {
+      "code": "StrgClick",
+      "ingui": "xinvtweaksfork:setting-StrgClick",
+      "comment": "xinvtweaksfork:setting-StrgClick-desc",
+      "type": "boolean",
+      "default": true,
+      "clientSide": true
+    },
+    {
+      "code": "Blocks",
+      "ingui": "xinvtweaksfork:setting-Blocks",
+      "comment": "xinvtweaksfork:setting-Blocks-desc",
+      "type": "boolean",
+      "default": true,
+      "clientSide": true
+    },
+    {
+      "code": "Stairs",
+      "ingui": "xinvtweaksfork:setting-Stairs",
+      "comment": "xinvtweaksfork:setting-Stairs-desc",
+      "type": "boolean",
+      "default": true,
+      "clientSide": true
+    },
+    {
+      "code": "Seeds",
+      "ingui": "xinvtweaksfork:setting-Seeds",
+      "comment": "xinvtweaksfork:setting-Seeds-desc",
+      "type": "boolean",
+      "default": true,
+      "clientSide": true
+    },
+    {
+      "code": "Tools",
+      "ingui": "xinvtweaksfork:setting-Tools",
+      "comment": "xinvtweaksfork:setting-Tools-desc",
+      "type": "boolean",
+      "default": true,
+      "clientSide": true
+    },
+    {
+      "code": "ToolSwitchDurability",
+      "ingui": "xinvtweaksfork:setting-ToolSwitchDurability",
+      "comment": "xinvtweaksfork:setting-ToolSwitchDurability-desc",
+      "type": "integer",
+      "default": 0,
+      "range": { "min": 0 },
+      "clientSide": true
+    },
+    {
+      "code": "Delay",
+      "ingui": "xinvtweaksfork:setting-Delay",
+      "comment": "xinvtweaksfork:setting-Delay-desc",
+      "type": "integer",
+      "default": 200,
+      "range": { "min": 0 },
+      "clientSide": true
+    },
+    {
+      "code": "CrateSwitch",
+      "ingui": "xinvtweaksfork:setting-CrateSwitch",
+      "comment": "xinvtweaksfork:setting-CrateSwitch-desc",
+      "type": "boolean",
+      "default": true,
+      "clientSide": true
+    },
+    {
+      "code": "GroundStorage",
+      "ingui": "xinvtweaksfork:setting-GroundStorage",
+      "comment": "xinvtweaksfork:setting-GroundStorage-desc",
+      "type": "boolean",
+      "default": true,
+      "clientSide": true
+    },
+    {
+      "code": "Piles",
+      "ingui": "xinvtweaksfork:setting-Piles",
+      "comment": "xinvtweaksfork:setting-Piles-desc",
+      "type": "boolean",
+      "default": true,
+      "clientSide": true
+    }
+  ]
+}

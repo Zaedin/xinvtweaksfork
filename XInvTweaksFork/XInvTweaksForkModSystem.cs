@@ -10,15 +10,18 @@ using Vintagestory.API.Server;
 using Vintagestory.Client.NoObf;
 using Vintagestory.GameContent;
 using XInvTweaksFork.Patches;
+using XInvTweaksFork.Patches.Compatibility;
 
 namespace XInvTweaksFork;
 
 public class XInvTweaksForkModSystem : ModSystem
 {
-    private Harmony? harmony;
-    private ICoreAPI api;
-    private ICoreClientAPI capi;
-    private ChestSortDialog chestSortDialog;
+    private Harmony? _harmony;
+    private ICoreAPI _api;
+    private ICoreClientAPI _capi;
+    private ChestSortDialog _chestSortDialog;
+    internal SlotLockSelection? SlotLocks { get; private set; }
+    internal SlotLockOverlay? LockOverlay { get; private set; }
 
     private const string ConfigPath = "xinvtweaksfork.json";
     
@@ -31,7 +34,7 @@ public class XInvTweaksForkModSystem : ModSystem
 
     public override void StartPre(ICoreAPI coreApi)
     {
-        api = coreApi;
+        _api = coreApi;
         LoadConfig();
     }
 
@@ -42,33 +45,48 @@ public class XInvTweaksForkModSystem : ModSystem
 
     public override void StartClientSide(ICoreClientAPI coreClientApi)
     {
-        capi = coreClientApi;
-        api = coreClientApi;
+        _capi = coreClientApi;
+        _api = coreClientApi;
+        SlotLocks = new SlotLockSelection(Config.LockedSlots);
+        LockOverlay = new SlotLockOverlay(_capi);
 
         PatchClient();
         RegisterKeys();
 
         if (!Config.ExtendChestUi) return;
-        chestSortDialog = new ChestSortDialog(capi);
+        _chestSortDialog = new ChestSortDialog(_capi, SlotLocks);
 
-        GuiDialog? invDialog = capi.Gui.LoadedGuis.OfType<GuiDialogInventory>().FirstOrDefault();
+        GuiDialog? invDialog = _capi.Gui.LoadedGuis.OfType<GuiDialogInventory>().FirstOrDefault();
 
         if (invDialog == null) return;
-        invDialog.OnOpened += () => chestSortDialog.OnInventoryOpened(invDialog.Composers["maininventory"].Bounds);
-        invDialog.OnClosed += () => { chestSortDialog.OnInventoryClosed(); };
+        invDialog.OnOpened += () => _chestSortDialog.OnInventoryOpened(invDialog.Composers["maininventory"].Bounds);
+        invDialog.OnClosed += () => { _chestSortDialog.OnInventoryClosed(); };
     }
 
     public override void Dispose()
     {
-        harmony?.UnpatchAll("XInvTweakPatch");
+        SlotLocks?.EndEditing();
+        _chestSortDialog?.Dispose();
+        LockOverlay?.Dispose();
+        _harmony?.UnpatchAll("XInvTweakPatch");
         base.Dispose();
+    }
+
+    internal void SaveSlotLocks()
+    {
+        SaveConfig();
+    }
+
+    private void SaveConfig()
+    {
+        ModConfigPersistence.Store(_api, Config, ConfigPath, _api.ModLoader.IsModEnabled("configlib"));
     }
 
     private void LoadConfig()
     {
         try
         {
-            Config = api.LoadModConfig<InvTweaksConfig>(ConfigPath);
+            Config = _api.LoadModConfig<InvTweaksConfig>(ConfigPath);
         }
         catch (Exception)
         {
@@ -78,7 +96,7 @@ public class XInvTweaksForkModSystem : ModSystem
         Config ??= new InvTweaksConfig();
         Config.SortBlacklist.Add("cart");
 
-        if (api.Side == EnumAppSide.Client)
+        if (_api.Side == EnumAppSide.Client)
         {
             if (Config.SortOrder.Count == 0)
             {
@@ -113,7 +131,7 @@ public class XInvTweaksForkModSystem : ModSystem
             InventoryUtil.StorageFlagsOrder = Config.StorageFlagsOrder;
         }
 
-        api.StoreModConfig(Config, ConfigPath);
+        SaveConfig();
     }
 
     private void OnWorldLoaded()
@@ -121,7 +139,7 @@ public class XInvTweaksForkModSystem : ModSystem
         var toAdd = new Dictionary<string, int>();
         var toRemove = new List<string>();
 
-        foreach (var collectible in api.World.Collectibles)
+        foreach (var collectible in _api.World.Collectibles)
         {
             var storageProps = collectible.GetBehavior<CollectibleBehaviorGroundStorable>()?.StorageProps;
             if (storageProps == null) continue;
@@ -162,97 +180,140 @@ public class XInvTweaksForkModSystem : ModSystem
                     Config.BulkQuanties.Add(iterator.Current.Key, iterator.Current.Value);
         }
 
-        api.StoreModConfig(Config, ConfigPath);
+        SaveConfig();
     }
 
     private void PatchClient()
     {
-        harmony = new Harmony("XInvTweakPatch");
-        harmony.PatchAll(Assembly.GetExecutingAssembly());
+        _harmony = new Harmony("XInvTweakPatch");
+        _harmony.PatchAll(Assembly.GetExecutingAssembly());
 
         if (Config.Tools)
-            ManualPatch.PatchMethod(harmony, typeof(CollectibleObject), typeof(CollectibleObjectPatch), "DamageItem");
+            ManualPatch.PatchMethod(_harmony, typeof(CollectibleObject), typeof(CollectibleObjectPatch), "DamageItem");
 
         //if (Config.groundStorage) ManualPatch.PatchMethod(harmony, typeof(CollectibleBehaviorGroundStorable), typeof(CollectibleObjectPatch), "Interact");
         if (Config.GroundStorage)
-            ManualPatch.PatchMethod(harmony, typeof(BlockEntityGroundStorage), typeof(BlockEntityGroundStoragePatch),
+            ManualPatch.PatchMethod(_harmony, typeof(BlockEntityGroundStorage), typeof(BlockEntityGroundStoragePatch),
                 "OnPlayerInteractStart");
 
         if (Config.Blocks)
-            ManualPatch.PatchMethod(harmony, typeof(Block), typeof(CollectibleObjectPatch), "TryPlaceBlock");
+            ManualPatch.PatchMethod(_harmony, typeof(Block), typeof(CollectibleObjectPatch), "TryPlaceBlock");
 
         if (Config.Stairs)
-            ManualPatch.PatchMethod(harmony, typeof(BlockStairs), typeof(CollectibleObjectPatch), "TryPlaceBlock");
+            ManualPatch.PatchMethod(_harmony, typeof(BlockStairs), typeof(CollectibleObjectPatch), "TryPlaceBlock");
 
         //if (Config.piles) ManualPatch.PatchMethod(harmony, typeof(BlockEntityItemPile), typeof(CollectibleObjectPatch), "OnPlayerInteract");
         if (Config.Piles)
-            ManualPatch.PatchMethod(harmony, typeof(BlockEntityItemPile), typeof(BlockEntityItemPilePatch),
+            ManualPatch.PatchMethod(_harmony, typeof(BlockEntityItemPile), typeof(BlockEntityItemPilePatch),
                 "OnPlayerInteract");
 
         if (Config.ExtendChestUi)
-            ManualPatch.PatchMethod(harmony, typeof(GuiDialogBlockEntityInventory),
+            ManualPatch.PatchMethod(_harmony, typeof(GuiDialogBlockEntityInventory),
                 typeof(GuiDialogBlockEntityInventoryPatch), "OnGuiOpened");
 
         if (Config.ExtendChestUi)
-            ManualPatch.PatchMethod(harmony, typeof(GuiDialogBlockEntityInventory),
+            ManualPatch.PatchMethod(_harmony, typeof(GuiDialogBlockEntityInventory),
                 typeof(GuiDialogBlockEntityInventoryPatch), "OnGuiClosed");
 
+        PatchSlotLocks(_harmony);
+
         if (Config.CrateSwitch)
-            ManualPatch.PatchMethod(harmony, typeof(BlockEntityCrate), typeof(BlockEntityCratePatch),
+            ManualPatch.PatchMethod(_harmony, typeof(BlockEntityCrate), typeof(BlockEntityCratePatch),
                 "OnBlockInteractStart");
 
         if (Config.Seeds)
         {
-            ManualPatch.PatchMethod(harmony, typeof(ItemPlantableSeed), typeof(CollectibleObjectPatch),
+            ManualPatch.PatchMethod(_harmony, typeof(ItemPlantableSeed), typeof(CollectibleObjectPatch),
                 "OnHeldInteractStart");
 
-            var assembly = capi.ModLoader.GetModSystem("XSkills.XSkills")?.GetType().Assembly;
+            var assembly = _capi.ModLoader.GetModSystem("XSkills.XSkills")?.GetType().Assembly;
             var type = assembly?.GetType("XSkills.XSkillsItemPlantableSeed");
             if (type != null)
-                ManualPatch.PatchMethod(harmony, type, typeof(CollectibleObjectPatch), "OnHeldInteractStart");
+                ManualPatch.PatchMethod(_harmony, type, typeof(CollectibleObjectPatch), "OnHeldInteractStart");
         }
 
         if (Config.StrgClick)
-            ManualPatch.PatchMethod(harmony, typeof(InventoryBase), typeof(InventoryBasePatch), "ActivateSlot");
+            ManualPatch.PatchMethod(_harmony, typeof(InventoryBase), typeof(InventoryBasePatch), "ActivateSlot");
 
-        if (Config.PushPullWheel)
-            ManualPatch.PatchMethod(harmony, typeof(GuiElementItemSlotGridBase),
-                typeof(GuiElementItemSlotGridBasePatch), "OnMouseWheel");
         //if (Config.survivalPick) ManualPatch.PatchMethod(harmony, typeof(SystemMouseInWorldInteractions), typeof(SystemMouseInWorldInteractionsPatch), "HandleMouseInteractionsBlockSelected");
+        
+        foreach (var system in _capi.ModLoader.Systems)
+        {
+            var type = system.GetType();
+            _api.Logger.Notification(type.FullName);
+        }
+        var modSystem = _capi.ModLoader.GetModSystem("PlayerInventoryLib.PlayerInventoryLibSystem");
+        if (modSystem != null)
+        {
+            PatchPlayerInventoryLib(modSystem);
+        }
 
-        capi.Event.LevelFinalize += OnWorldLoaded;
+        _capi.Event.LevelFinalize += OnWorldLoaded;
+    }
+
+    // Slot locks are independent of the optional sorting dialog and wheel-transfer feature.
+    internal static void PatchSlotLocks(Harmony harmony)
+    {
+        foreach (var method in new[]
+                 {
+                     "OnMouseDownOnElement", "SlotClick", "RenderInteractiveElements", "OnMouseWheel", "OnGuiClosed"
+                 })
+            ManualPatch.PatchMethod(harmony, typeof(GuiElementItemSlotGridBase),
+                typeof(GuiElementItemSlotGridBasePatch), method);
+    }
+    
+    private void PatchPlayerInventoryLib(ModSystem modSystem)
+    {
+        if (_harmony is null) return;
+        var assembly = modSystem.GetType().Assembly;
+
+        var dialogType = assembly.GetType("PlayerInventoryLib.GUI.GuiDialogSurvivalInventory");
+        if (dialogType == null)
+        {
+            _api.Logger.Warning("[XInvTweaksFork] PlayerInventoryLib detected, but GuiDialogSurvivalInventory was not found.");
+            return;
+        }
+
+        ManualPatch.PatchMethod(_harmony, dialogType, typeof(GuiDialogPlayerInventoryLibPatch), "OnGuiOpened");
+        ManualPatch.PatchMethod(_harmony, dialogType, typeof(GuiDialogPlayerInventoryLibPatch), "OnGuiClosed");
+
+        _api.Logger.Notification("[XInvTweaksFork] Patched PlayerInventoryLib.");
     }
 
     private void RegisterKeys()
     {
-        capi.Input.RegisterHotKey("pushinventory", Lang.Get("xinvtweaksfork:pushinventory"), GlKeys.Z,
+        _capi.Input.RegisterHotKey("pushinventory", Lang.Get("xinvtweaksfork:pushinventory"), GlKeys.Z,
             HotkeyType.InventoryHotkeys);
-        capi.Input.RegisterHotKey("sortinventories", Lang.Get("xinvtweaksfork:sortinventories"), GlKeys.Z,
+        _capi.Input.RegisterHotKey("sortinventories", Lang.Get("xinvtweaksfork:sortinventories"), GlKeys.Z,
             HotkeyType.InventoryHotkeys, false, false, true);
-        capi.Input.RegisterHotKey("pullinventory", Lang.Get("xinvtweaksfork:pullinventory"), GlKeys.Z,
+        _capi.Input.RegisterHotKey("pullinventory", Lang.Get("xinvtweaksfork:pullinventory"), GlKeys.Z,
             HotkeyType.InventoryHotkeys, false, true);
-        capi.Input.RegisterHotKey("sortbackpack", Lang.Get("xinvtweaksfork:sortbackpack"), GlKeys.Z,
+        _capi.Input.RegisterHotKey("sortbackpack", Lang.Get("xinvtweaksfork:sortbackpack"), GlKeys.Z,
             HotkeyType.InventoryHotkeys, true);
-        capi.Input.RegisterHotKey("fillbackpack", Lang.Get("xinvtweaksfork:fillbackpack"), GlKeys.Z,
+        _capi.Input.RegisterHotKey("fillbackpack", Lang.Get("xinvtweaksfork:fillbackpack"), GlKeys.Z,
             HotkeyType.InventoryHotkeys, true, true);
-        capi.Input.RegisterHotKey("clearhandslot", Lang.Get("xinvtweaksfork:clearhandslot"), GlKeys.V,
+        _capi.Input.RegisterHotKey("clearhandslot", Lang.Get("xinvtweaksfork:clearhandslot"), GlKeys.V,
             HotkeyType.InventoryHotkeys);
 
-        capi.Input.SetHotKeyHandler("pushinventory", _ => InventoryUtil.PushInventory(capi));
-        capi.Input.SetHotKeyHandler("sortinventories", _ => InventoryUtil.SortInventories(capi));
-        capi.Input.SetHotKeyHandler("pullinventory", _ => InventoryUtil.PullInventory(capi));
-        capi.Input.SetHotKeyHandler("sortbackpack", _ => InventoryUtil.SortBackpack(capi));
-        capi.Input.SetHotKeyHandler("fillbackpack", _ => InventoryUtil.FillBackpack(capi));
-        capi.Input.SetHotKeyHandler("clearhandslot", _ => InventoryUtil.ClearHandSlot(capi));
+        _capi.Input.SetHotKeyHandler("pushinventory", _ => InventoryUtil.PushInventory(_capi));
+        _capi.Input.SetHotKeyHandler("sortinventories", _ => InventoryUtil.SortInventories(_capi));
+        _capi.Input.SetHotKeyHandler("pullinventory", _ => InventoryUtil.PullInventory(_capi));
+        _capi.Input.SetHotKeyHandler("sortbackpack", _ => InventoryUtil.SortBackpack(_capi));
+        _capi.Input.SetHotKeyHandler("fillbackpack", _ => InventoryUtil.FillBackpack(_capi));
+        _capi.Input.SetHotKeyHandler("clearhandslot", _ => InventoryUtil.ClearHandSlot(_capi));
+        SlotLockHotkey.Register(_capi.Input, SlotLocks!, Lang.Get("xinvtweaksfork:togglelockselection"),
+            editing => _capi.ShowChatMessage(Lang.Get(editing
+                ? "xinvtweaksfork:lockselection-enabled"
+                : "xinvtweaksfork:lockselection-disabled")));
     }
 
     public void OnInventoryOpened(ElementBounds parent)
     {
-        chestSortDialog.OnInventoryOpened(parent);
+        _chestSortDialog?.OnInventoryOpened(parent);
     }
 
     public void OnInventoryClosed()
     {
-        chestSortDialog.OnInventoryClosed();
+        _chestSortDialog?.OnInventoryClosed();
     }
 }
