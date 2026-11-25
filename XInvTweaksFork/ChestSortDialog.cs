@@ -14,6 +14,7 @@ public class ChestSortDialog : HudElement
     {
         this.slotLocks = slotLocks;
         Setup();
+        slotLocks.EditingChanged += UpdateLockButton;
     }
 
     protected void Setup()
@@ -58,7 +59,6 @@ public class ChestSortDialog : HudElement
     private bool OnToggleLocks()
     {
         slotLocks.ToggleEditing();
-        UpdateLockButton();
         return true;
     }
 
@@ -72,8 +72,13 @@ public class ChestSortDialog : HudElement
     public override void OnGuiClosed()
     {
         slotLocks.EndEditing();
-        UpdateLockButton();
         base.OnGuiClosed();
+    }
+
+    public override void Dispose()
+    {
+        slotLocks.EditingChanged -= UpdateLockButton;
+        base.Dispose();
     }
 
     protected void OnTextChanged(string text)

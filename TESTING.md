@@ -137,7 +137,26 @@ Client verification checklist (pending):
 Open your backpack, click **Lock slots**, then left-click storage slots to toggle
 locks, including empty slots. A black padlock outline marks locked slots, even outside
 selection mode. Click **Done locking slots** to return to normal item interaction.
-Closing the last inventory dialog also exits selection mode.
+Alternatively, press **Ctrl+Alt+L** to toggle selection mode. This is rebindable
+under Controls as **Toggle slot-lock selection**. A chat message reports the
+new mode. Toggling selection off does not disable or remove any saved locks.
+The button label follows hotkey changes when the sorting dialog is enabled.
+
+Lock icons and selection mode work with `ExtendChestUi: false` and
+`PushPullWheel: false`; ExtendChestUi controls only the extra sorting dialog.
+Closing the backpack's slot grid exits selection mode, even without that dialog,
+as does closing the sorting dialog or leaving the world.
+
+Automated coverage: input registration/handler tests check the default key,
+rebinding identifier, both toggle directions and shared state notifications.
+Patch installation tests verify unconditional input/render/close bindings. An
+Atlas scenario checks that editing, persistence and unavailable locks continue
+working with both UI and wheel transfers disabled. It does not execute real
+client rendering, key routing or dialog events. All pre-existing tests remain
+unchanged; the full suite passes 57 unit tests plus 6 Atlas scenarios (63 total,
+zero failures/skips), compared with the 54-test baseline. Reuse **All Tests** at
+`.run/All Tests.run.xml`; its full CLI command above was executed successfully.
+The IDE launch and real-client checks remain unverified.
 
 Locks use the existing config and existing sort/push semantics. They prevent
 backpack sorting and automatic push from taking those slots; they do not prevent
@@ -169,15 +188,18 @@ Use a disposable world and back up your mod config.
    leave 15 storage slots. Sort/push and reopen inventory: no error, no phantom
    padlock on another slot. Restore capacity: slot 20's lock returns.
    Repeat with no backpacks, and with lock mode still enabled.
-5. Close the last inventory window while editing; reopen and verify normal
-   interaction and the **Lock slots** label. With several inventories open,
-   closing only one must not prematurely exit selection mode.
+5. Toggle editing via Ctrl+Alt+L and verify chat feedback, the button label and
+   click behavior agree. Toggle off: locks remain visible and still protect
+   sorting. Rebind the hotkey and repeat. Close the backpack while editing;
+   reopen and verify normal interaction and the **Lock slots** label. Closing an
+   unrelated chest while the backpack remains open must not end selection.
 6. Restart the client/world: locks persist, but selection mode is off. Check the
    config retains unrelated custom settings and unavailable lock indices.
 7. Check standard inventory and PlayerInventoryLib (if installed), scrolling,
    GUI scaling and window repositioning: badges align with the actual rendered
    slots and do not appear outside clipped inventory bounds.
-8. With `ExtendChestUi: false`, no new button/input/render patches should be active.
+8. With `ExtendChestUi: false`, the extra sorting dialog must be absent, while
+   saved lock icons and the hotkey-driven selection mode remain functional.
    Set it with the game closed, join a world, leave, and confirm it stays false
    in `ModConfig/xinvtweaksfork.json`; rejoining must keep the extra dialog absent.
    With `PushPullWheel: false` and UI enabled, locking still works without

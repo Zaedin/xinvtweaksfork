@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace XInvTweaksFork;
@@ -12,15 +13,25 @@ public sealed class SlotLockSelection
     private readonly SortedSet<int> lockedSlots;
 
     public bool IsEditing { get; private set; }
+    public event Action? EditingChanged;
 
     public SlotLockSelection(SortedSet<int> lockedSlots)
     {
         this.lockedSlots = lockedSlots;
     }
 
-    public void ToggleEditing() => IsEditing = !IsEditing;
+    public void ToggleEditing()
+    {
+        IsEditing = !IsEditing;
+        EditingChanged?.Invoke();
+    }
 
-    public void EndEditing() => IsEditing = false;
+    public void EndEditing()
+    {
+        if (!IsEditing) return;
+        IsEditing = false;
+        EditingChanged?.Invoke();
+    }
 
     public static bool IsStorageSlot(int slotId, int inventoryCount, int first = BackpackFirstSlot)
     {

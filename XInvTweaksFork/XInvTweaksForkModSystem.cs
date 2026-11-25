@@ -301,6 +301,10 @@ public class XInvTweaksForkModSystem : ModSystem
         _capi.Input.SetHotKeyHandler("sortbackpack", _ => InventoryUtil.SortBackpack(_capi));
         _capi.Input.SetHotKeyHandler("fillbackpack", _ => InventoryUtil.FillBackpack(_capi));
         _capi.Input.SetHotKeyHandler("clearhandslot", _ => InventoryUtil.ClearHandSlot(_capi));
+        SlotLockHotkey.Register(_capi.Input, SlotLocks!, Lang.Get("xinvtweaksfork:togglelockselection"),
+            editing => _capi.ShowChatMessage(Lang.Get(editing
+                ? "xinvtweaksfork:lockselection-enabled"
+                : "xinvtweaksfork:lockselection-disabled")));
     }
 
     public void OnInventoryOpened(ElementBounds parent)
