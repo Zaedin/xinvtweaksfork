@@ -74,7 +74,12 @@ public class XInvTweaksForkModSystem : ModSystem
 
     internal void SaveSlotLocks()
     {
-        _capi.StoreModConfig(Config, ConfigPath);
+        SaveConfig();
+    }
+
+    private void SaveConfig()
+    {
+        ModConfigPersistence.Store(_api, Config, ConfigPath, _api.ModLoader.IsModEnabled("configlib"));
     }
 
     private void LoadConfig()
@@ -126,7 +131,7 @@ public class XInvTweaksForkModSystem : ModSystem
             InventoryUtil.StorageFlagsOrder = Config.StorageFlagsOrder;
         }
 
-        _api.StoreModConfig(Config, ConfigPath);
+        SaveConfig();
     }
 
     private void OnWorldLoaded()
@@ -175,7 +180,7 @@ public class XInvTweaksForkModSystem : ModSystem
                     Config.BulkQuanties.Add(iterator.Current.Key, iterator.Current.Value);
         }
 
-        _api.StoreModConfig(Config, ConfigPath);
+        SaveConfig();
     }
 
     private void PatchClient()
