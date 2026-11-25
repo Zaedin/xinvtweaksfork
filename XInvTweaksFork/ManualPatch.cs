@@ -4,12 +4,11 @@ using HarmonyLib;
 
 namespace XInvTweaksFork;
 
-internal class ManualPatch
+internal static class ManualPatch
 {
     internal static void PatchMethod(Harmony harmony, Type type, Type patch, string method)
     {
-        if (harmony == null || type == null || patch == null || method == null) return;
-        MethodInfo original;
+        MethodInfo? original;
         var baseType = type;
         do
         {
@@ -37,12 +36,11 @@ internal class ManualPatch
 
     internal static void PatchConstructor(Harmony harmony, Type type, Type patch)
     {
-        if (harmony == null || type == null) return;
-        ConstructorInfo original;
+        ConstructorInfo? original;
         var baseType = type;
         do
         {
-            original = baseType.GetConstructor(new Type[0]);
+            original = baseType.GetConstructor([]);
             var constructors = baseType.GetConstructors();
 
             if (original == null && constructors.Length > 0) original = constructors[0];

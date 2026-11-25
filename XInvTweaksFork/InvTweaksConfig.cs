@@ -12,19 +12,19 @@ public class InvTweaksConfig
     public readonly int Delay = 200;
     public readonly bool ExtendChestUi = true;
     public readonly bool GroundStorage = true;
-    public readonly SortedSet<int> LockedSlots = new();
+    public readonly SortedSet<int> LockedSlots = [];
     public readonly bool Piles = true;
 
     public readonly Dictionary<string, int> Priorities = new();
 
     public readonly bool PushPullWheel = true;
     public readonly bool Seeds = true;
-    public readonly SortedSet<string> SortBlacklist = new();
+    public readonly SortedSet<string> SortBlacklist = [];
 
-    public readonly List<string> SortOrder = new();
-    public readonly List<string> StackOrder = new();
+    public readonly List<string> SortOrder = [];
+    public readonly List<string> StackOrder = [];
     public readonly bool Stairs = true;
-    public readonly List<EnumItemStorageFlags> StorageFlagsOrder = new();
+    public readonly List<EnumItemStorageFlags> StorageFlagsOrder = [];
     public readonly bool StrgClick = true;
     public readonly bool Tools = true;
     public readonly int ToolSwitchDurability = 0;
