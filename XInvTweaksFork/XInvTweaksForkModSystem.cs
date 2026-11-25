@@ -215,15 +215,7 @@ public class XInvTweaksForkModSystem : ModSystem
             ManualPatch.PatchMethod(_harmony, typeof(GuiDialogBlockEntityInventory),
                 typeof(GuiDialogBlockEntityInventoryPatch), "OnGuiClosed");
 
-        if (Config.ExtendChestUi)
-        {
-            ManualPatch.PatchMethod(_harmony, typeof(GuiElementItemSlotGridBase),
-                typeof(GuiElementItemSlotGridBasePatch), "OnMouseDownOnElement");
-            ManualPatch.PatchMethod(_harmony, typeof(GuiElementItemSlotGridBase),
-                typeof(GuiElementItemSlotGridBasePatch), "SlotClick");
-            ManualPatch.PatchMethod(_harmony, typeof(GuiElementItemSlotGridBase),
-                typeof(GuiElementItemSlotGridBasePatch), "RenderInteractiveElements");
-        }
+        PatchSlotLocks(_harmony);
 
         if (Config.CrateSwitch)
             ManualPatch.PatchMethod(_harmony, typeof(BlockEntityCrate), typeof(BlockEntityCratePatch),
@@ -243,9 +235,6 @@ public class XInvTweaksForkModSystem : ModSystem
         if (Config.StrgClick)
             ManualPatch.PatchMethod(_harmony, typeof(InventoryBase), typeof(InventoryBasePatch), "ActivateSlot");
 
-        if (Config.PushPullWheel || Config.ExtendChestUi)
-            ManualPatch.PatchMethod(_harmony, typeof(GuiElementItemSlotGridBase),
-                typeof(GuiElementItemSlotGridBasePatch), "OnMouseWheel");
         //if (Config.survivalPick) ManualPatch.PatchMethod(harmony, typeof(SystemMouseInWorldInteractions), typeof(SystemMouseInWorldInteractionsPatch), "HandleMouseInteractionsBlockSelected");
         
         foreach (var system in _capi.ModLoader.Systems)
@@ -260,6 +249,17 @@ public class XInvTweaksForkModSystem : ModSystem
         }
 
         _capi.Event.LevelFinalize += OnWorldLoaded;
+    }
+
+    // Slot locks are independent of the optional sorting dialog and wheel-transfer feature.
+    internal static void PatchSlotLocks(Harmony harmony)
+    {
+        foreach (var method in new[]
+                 {
+                     "OnMouseDownOnElement", "SlotClick", "RenderInteractiveElements", "OnMouseWheel", "OnGuiClosed"
+                 })
+            ManualPatch.PatchMethod(harmony, typeof(GuiElementItemSlotGridBase),
+                typeof(GuiElementItemSlotGridBasePatch), method);
     }
     
     private void PatchPlayerInventoryLib(ModSystem modSystem)
@@ -305,11 +305,11 @@ public class XInvTweaksForkModSystem : ModSystem
 
     public void OnInventoryOpened(ElementBounds parent)
     {
-        _chestSortDialog.OnInventoryOpened(parent);
+        _chestSortDialog?.OnInventoryOpened(parent);
     }
 
     public void OnInventoryClosed()
     {
-        _chestSortDialog.OnInventoryClosed();
+        _chestSortDialog?.OnInventoryClosed();
     }
 }

@@ -15,6 +15,12 @@ internal class GuiElementItemSlotGridBasePatch
             api.World.Player.InventoryManager.GetOwnInventory(GlobalConstants.backpackInvClassName));
     }
 
+    public static void OnGuiClosedPostfix(IInventory ___inventory, ICoreClientAPI api)
+    {
+        if (IsOwnBackpack(api, ___inventory))
+            api.ModLoader.GetModSystem<XInvTweaksForkModSystem>().SlotLocks?.EndEditing();
+    }
+
     public static bool OnMouseDownOnElementPrefix(GuiElementItemSlotGridBase __instance,
         IInventory ___inventory, ICoreClientAPI api, MouseEvent args)
     {
